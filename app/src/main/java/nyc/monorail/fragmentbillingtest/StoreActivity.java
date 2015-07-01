@@ -6,6 +6,7 @@ import nyc.monorail.fragmentbillingtest.util.Inventory;
 import nyc.monorail.fragmentbillingtest.util.Purchase;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -19,6 +20,7 @@ import android.widget.Toast;
 
 public class StoreActivity extends ActionBarActivity {
 
+    public final static String EXTRA_MESSAGE = "nyc.monorail.fragmentbillingtest.MESSAGE";
     int counter;
     IabHelper mHelper;
     private static final String TAG = "nyc.monorail.fragmentbi";
@@ -26,19 +28,19 @@ public class StoreActivity extends ActionBarActivity {
     private Button fiveButton;
     private Button tenButton;
     static final String ONE_ITEM_SKU = "android.test.purchased";
-    static final String FIVE_ITEM_SKU = "nyc.monorail.fiveitems";
-    static final String TEN_ITEM_SKU = "nyc.monorail.tenitems";
+    static final String FIVE_ITEM_SKU = "android.test.purchased";
+    static final String TEN_ITEM_SKU = "android.test.purchased";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_store);
 
-        /*Intent intent=getIntent();
-        String message = intent.getStringExtra(MainActivity.EXTRA_MESSAGE);
-        counter=Integer.parseInt(message);
+        loadData();
+        Intent intent=getIntent();
         TextView textView=(TextView) findViewById(R.id.counterText);
-        textView.setText(" "+counter);*/
+        String str= Integer.toString(counter);
+        textView.setText(str);
 
 
         String base64EncodedPublicKey=
@@ -52,17 +54,55 @@ public class StoreActivity extends ActionBarActivity {
         mHelper = new IabHelper(this, base64EncodedPublicKey);
 
         mHelper.startSetup(new IabHelper.OnIabSetupFinishedListener() {
-                               public void onIabSetupFinished(IabResult result) {
-                                   if (!result.isSuccess()) {
-                                       Log.d(TAG, "In-app Billing setup failed: " +
-                                               result);
-                                   } else {
-                                       Log.d(TAG, "In-app Billing is set up OK");
-                                   }
-                               }
-                           });
+            public void onIabSetupFinished(IabResult result) {
+                if (!result.isSuccess()) {
+                    Log.d(TAG, "In-app Billing setup failed: " +
+                            result);
+                } else {
+                    Log.d(TAG, "Setup successful. Querying inventory.");
+                    mHelper.queryInventoryAsync(mGotInventoryListener);
 
+                }
+            }
+        });
+    }
 
+    IabHelper.QueryInventoryFinishedListener mGotInventoryListener = new IabHelper.QueryInventoryFinishedListener() {
+        public void onQueryInventoryFinished(IabResult result, Inventory inventory) {
+            Log.d(TAG, "Query inventory finished.");
+
+            // Have we been disposed of in the meantime? If so, quit.
+            if (mHelper == null) return;
+
+            // Is it a failure?
+            if (result.isFailure()) {
+                Log.d(TAG,"Failed to query inventory: " + result);
+                return;
+            }
+
+            Log.d(TAG, "Query inventory was successful.");
+
+            /*
+             * Check for items we own. Notice that for each purchase, we check
+             * the developer payload to see if it's correct! See
+             * verifyDeveloperPayload().
+             */
+            // Check for item delivery -- if we own an item, we should use it immediately
+            Purchase oneItemPurchase = inventory.getPurchase(ONE_ITEM_SKU);
+            if (oneItemPurchase != null && verifyDeveloperPayload(oneItemPurchase)) {
+                Log.d(TAG, "We have an item. Consuming it.");
+                mHelper.consumeAsync(inventory.getPurchase(ONE_ITEM_SKU), mConsumeFinishedListener);
+                return;
+            }
+
+            updateUi();
+            Log.d(TAG, "Initial inventory query finished; enabling main UI.");
+        }
+    };
+
+    boolean verifyDeveloperPayload(Purchase p) {
+        String payload = p.getDeveloperPayload();
+        return true;
     }
 
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -120,7 +160,7 @@ public class StoreActivity extends ActionBarActivity {
 
     IabHelper.QueryInventoryFinishedListener mReceivedInventoryListener = new IabHelper.QueryInventoryFinishedListener() {
         public void onQueryInventoryFinished(IabResult result, Inventory inventory) {
-            if (result.isFailure()) {
+            if(result.isFailure()) {
                 // Handle failure
             } else {
                 mHelper.consumeAsync(inventory.getPurchase(ONE_ITEM_SKU),
@@ -131,15 +171,27 @@ public class StoreActivity extends ActionBarActivity {
 
     IabHelper.OnConsumeFinishedListener mConsumeFinishedListener = new IabHelper.OnConsumeFinishedListener() {
         public void onConsumeFinished(Purchase purchase, IabResult result) {
-            if (result.isSuccess()) {
-                CharSequence sentence = "You have successfuly purchased one item!";
-                Toast.makeText(getApplicationContext(),sentence,Toast.LENGTH_SHORT).show();
+            if (mHelper == null) return;
 
-            } else {
-                // handle error
+            // We know this is the "gas" sku because it's the only one we consume,
+            // so we don't check which sku was consumed. If you have more than one
+            // sku, you probably should check...
+            if (result.isSuccess()) {
+                if(purchase.getSku().equals(ONE_ITEM_SKU)) {
+                    Log.d(TAG, "Consumption successful. Provisioning.");
+                    CharSequence charSequence = "You just purchased one item.";
+                    Toast.makeText(getApplicationContext(),charSequence,Toast.LENGTH_SHORT).show();
+                    counter++;
+                    saveData();
+                }
             }
+            else {
+                Log.d(TAG,"Error while consuming: " + result);
+            }
+            updateUi();
         }
     };
+
 
     @Override
     public void onDestroy() {
@@ -163,7 +215,33 @@ public class StoreActivity extends ActionBarActivity {
                 mPurchaseFinishedListener, "mypurchasetoken");
     }
 
+    public void updateUi(){
+        TextView textView = (TextView)findViewById(R.id.counterText);
+        textView.setText(Integer.toString(counter)) ;
+    }
+
     public void returnToMainActivity(View view) {
-        //Implement
+        Intent intent = new Intent(this,MainActivity.class);
+        startActivity(intent);
+    }
+
+    void saveData() {
+
+        /*
+         * WARNING: on a real application, we recommend you save data in a secure way to
+         * prevent tampering. For simplicity in this sample, we simply store the data using a
+         * SharedPreferences.
+         */
+
+        SharedPreferences.Editor spe = getPreferences(MODE_PRIVATE).edit();
+        spe.putInt("items", counter);
+        spe.commit();
+        Log.d(TAG, "Saved data: items = " + String.valueOf(counter));
+    }
+
+    void loadData() {
+        SharedPreferences sp = getPreferences(MODE_PRIVATE);
+        counter = sp.getInt("items", 0);
+        Log.d(TAG, "Loaded data: items = " + String.valueOf(counter));
     }
 }

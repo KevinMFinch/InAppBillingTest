@@ -5,7 +5,7 @@
     <string name="action_settings">Settings</string>
     <string name="landscape_text">In landscape fragment</string>
     <string name="portrait_text">In portrait fragment</string>
-    <string name="num_things_string">The amount of things you have is:</string>
+    <string name="num_things_string">The amount of things you have is: </string>
     <string name="button_string">Click here to browse purchase options.</string>
     <string name="title_activity_store">StoreActivity</string>
     <string name="button_one_string">Buy one thing</string>

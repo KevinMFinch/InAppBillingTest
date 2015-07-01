@@ -3,8 +3,10 @@ package nyc.monorail.fragmentbillingtest;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -18,7 +20,6 @@ public class MainActivity extends ActionBarActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
     }
 
     @Override
@@ -45,9 +46,12 @@ public class MainActivity extends ActionBarActivity {
 
     public void openStore(View view) {
         Intent intent = new Intent(this,StoreActivity.class);
-        TextView textView = (TextView) findViewById(R.id.text_string);
-        String str = textView.getText().toString();
-        intent.putExtra(EXTRA_MESSAGE,str);
         startActivity(intent);
     }
+
+    protected void onRestart() {
+        super.onRestart();
+        recreate();
+    }
+
 }
